@@ -1,0 +1,170 @@
+Librarysystem · JAVA
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+ 
+// ---------- User-defined exceptions ----------
+class InvalidBookIdException extends Exception {
+    InvalidBookIdException(String msg) { super(msg); }
+}
+class InvalidMemberIdException extends Exception {
+    InvalidMemberIdException(String msg) { super(msg); }
+}
+class BookUnavailableException extends Exception {
+    BookUnavailableException(String msg) { super(msg); }
+}
+class BorrowLimitExceededException extends Exception {
+    BorrowLimitExceededException(String msg) { super(msg); }
+}
+class InvalidReturnDateException extends Exception {
+    InvalidReturnDateException(String msg) { super(msg); }
+}
+ 
+// ---------- Model classes ----------
+class Book {
+    int id; String title, author; boolean available = true;
+    Book(int id, String title, String author) {
+        this.id = id; this.title = title; this.author = author;
+    }
+    public String toString() {
+        return id + " | " + title + " | " + author + " | " + (available ? "Available" : "Issued");
+    }
+}
+ 
+class Member {
+    int id; String name;
+    Map<Integer, LocalDate> borrowed = new HashMap<>(); // bookId -> issue date
+    Member(int id, String name) { this.id = id; this.name = name; }
+}
+ 
+// ---------- Library logic ----------
+class Library {
+    static final int MAX_BOOKS = 3;
+    static final int FREE_DAYS = 7;
+    static final int FINE_PER_DAY = 2;
+ 
+    Map<Integer, Book> books = new HashMap<>();
+    Map<Integer, Member> members = new HashMap<>();
+ 
+    Library() {
+        books.put(101, new Book(101, "Java Complete Reference", "Herbert Schildt"));
+        books.put(102, new Book(102, "Head First Java", "Kathy Sierra"));
+        books.put(103, new Book(103, "Data Structures", "Mark Weiss"));
+        books.put(104, new Book(104, "Clean Code", "Robert Martin"));
+        members.put(1, new Member(1, "Arun"));
+        members.put(2, new Member(2, "Meena"));
+    }
+ 
+    Book getBook(int id) throws InvalidBookIdException {
+        Book b = books.get(id);
+        if (b == null) throw new InvalidBookIdException("Invalid Book ID: " + id);
+        return b;
+    }
+ 
+    Member getMember(int id) throws InvalidMemberIdException {
+        Member m = members.get(id);
+        if (m == null) throw new InvalidMemberIdException("Invalid Member ID: " + id);
+        return m;
+    }
+ 
+    void search(String keyword) {
+        boolean found = false;
+        for (Book b : books.values()) {
+            if (b.title.toLowerCase().contains(keyword.toLowerCase())
+                    || b.author.toLowerCase().contains(keyword.toLowerCase())) {
+                System.out.println(b);
+                found = true;
+            }
+        }
+        if (!found) System.out.println("No books found.");
+    }
+ 
+    void issueBook(int memberId, int bookId)
+            throws InvalidMemberIdException, InvalidBookIdException,
+                   BookUnavailableException, BorrowLimitExceededException {
+        Member m = getMember(memberId);
+        Book b = getBook(bookId);
+        if (!b.available)
+            throw new BookUnavailableException("Book '" + b.title + "' is already issued.");
+        if (m.borrowed.size() >= MAX_BOOKS)
+            throw new BorrowLimitExceededException("Limit of " + MAX_BOOKS + " books exceeded.");
+        b.available = false;
+        m.borrowed.put(bookId, LocalDate.now());
+        System.out.println("Book issued to " + m.name + ". Due in " + FREE_DAYS + " days.");
+    }
+ 
+    void returnBook(int memberId, int bookId, LocalDate returnDate)
+            throws InvalidMemberIdException, InvalidBookIdException, InvalidReturnDateException {
+        Member m = getMember(memberId);
+        Book b = getBook(bookId);
+        LocalDate issued = m.borrowed.get(bookId);
+        if (issued == null)
+            throw new InvalidBookIdException("This member has not borrowed book " + bookId);
+        if (returnDate.isBefore(issued))
+            throw new InvalidReturnDateException("Return date cannot be before issue date (" + issued + ")");
+        long days = java.time.temporal.ChronoUnit.DAYS.between(issued, returnDate);
+        long fine = days > FREE_DAYS ? (days - FREE_DAYS) * FINE_PER_DAY : 0;
+        b.available = true;
+        m.borrowed.remove(bookId);
+        System.out.println("Book returned. Fine: Rs." + fine);
+    }
+}
+ 
+// ---------- Main program ----------
+public class LibrarySystem {
+    public static void main(String[] args) {
+        Library lib = new Library();
+        Scanner sc = new Scanner(System.in);
+        int choice = 0;
+ 
+        while (choice != 5) {
+            System.out.println("\n--- LIBRARY MENU ---");
+            System.out.println("1.Search  2.Issue  3.Return  4.Show All Books  5.Exit");
+            System.out.print("Enter choice: ");
+            try {
+                choice = Integer.parseInt(sc.nextLine().trim());
+                switch (choice) {
+                    case 1:
+                        System.out.print("Enter title/author keyword: ");
+                        lib.search(sc.nextLine());
+                        break;
+                    case 2:
+                        System.out.print("Member ID: ");
+                        int m1 = Integer.parseInt(sc.nextLine().trim());
+                        System.out.print("Book ID: ");
+                        int b1 = Integer.parseInt(sc.nextLine().trim());
+                        lib.issueBook(m1, b1);
+                        break;
+                    case 3:
+                        System.out.print("Member ID: ");
+                        int m2 = Integer.parseInt(sc.nextLine().trim());
+                        System.out.print("Book ID: ");
+                        int b2 = Integer.parseInt(sc.nextLine().trim());
+                        System.out.print("Return date (yyyy-mm-dd): ");
+                        LocalDate d = LocalDate.parse(sc.nextLine().trim());
+                        lib.returnBook(m2, b2, d);
+                        break;
+                    case 4:
+                        for (Book b : lib.books.values()) System.out.println(b);
+                        break;
+                    case 5:
+                        System.out.println("Thank you!");
+                        break;
+                    default:
+                        System.out.println("Please choose 1-5.");
+                }
+            } catch (InvalidBookIdException | InvalidMemberIdException
+                     | BookUnavailableException | BorrowLimitExceededException
+                     | InvalidReturnDateException e) {
+                System.out.println("Error: " + e.getMessage());
+            } catch (NumberFormatException e) {
+                System.out.println("Error: Please enter a valid number.");
+            } catch (DateTimeParseException e) {
+                System.out.println("Error: Invalid date format. Use yyyy-mm-dd.");
+            } finally {
+                System.out.println("[Operation finished]");
+            }
+        }
+        sc.close();
+    }
+}
